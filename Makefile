@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: image clean bootstrap deps 
+.PHONY: image clean bootstrap deps build image
 .DEFAULT_GOAL := build
 
 # Tools required for different make targets or for development purposes
@@ -32,12 +32,8 @@ deps:
 	rm -rf vendor
 	@glide up
 
-openebs-provisioner: $(shell find . -name "*.go")
-	#glide install -v --strip-vcs
-	CGO_ENABLED=0 go build -a -ldflags '-extldflags "-static"' -o openebs-provisioner .
-
 build: $(shell find . -name "*.go")
-	glide install -v --strip-vcs
+	glide install -v
 	CGO_ENABLED=0 go build -a -ldflags '-extldflags "-static"' -o openebs-provisioner .
 
 image: build
