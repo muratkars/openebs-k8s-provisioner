@@ -71,7 +71,7 @@ var _ controller.Provisioner = &openEBSProvisioner{}
 
 // Provision creates a storage asset and returns a PV object representing it.
 func (p *openEBSProvisioner) Provision(options controller.VolumeOptions) (*v1.PersistentVolume, error) {
-	path := options.PVName
+	path := "/var/openebs/" + options.PVName
 
 	//TODO - Issue a request to Maya API Server to create a volume
 	//TODO - fill in the iSCSI PV details
