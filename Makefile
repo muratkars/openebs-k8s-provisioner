@@ -19,8 +19,6 @@
 EXTERNAL_TOOLS=\
 	github.com/Masterminds/glide 
 
-IMAGE?=openebs-provisioner
-
 # Bootstrap the build by downloading additional tools
 bootstrap:
 	@for tool in  $(EXTERNAL_TOOLS) ; do \
