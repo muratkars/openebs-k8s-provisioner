@@ -1,0 +1,23 @@
+sudo: required
+dist: trusty
+services:
+  - docker
+language: go
+go:
+  - 1.8
+before_install:
+  - sudo apt-get update
+  - sudo apt-get install -y docker-engine 
+install:
+  - make bootstrap
+script:
+  - make deps build
+after_success:
+  - make image
+notifications:
+  email:
+    recipients:
+    - kiran.mova@cloudbyte.com
+branches:
+  except:
+    - /^*-v[0-9]/      
