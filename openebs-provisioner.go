@@ -18,8 +18,11 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"time"
 
@@ -31,9 +34,11 @@ import (
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/rest"
 	"syscall"
+	yaml "gopkg.in/yaml.v2"
 )
 
 const (
+	timeout                   = 60 * time.Second
 	resyncPeriod              = 15 * time.Second
 	provisionerName           = "openebs.io/provisioner-iscsi"
 	exponentialBackOffOnError = false
@@ -43,6 +48,18 @@ const (
 	renewDeadline             = controller.DefaultRenewDeadline
 	termLimit                 = controller.DefaultTermLimit
 )
+
+//VsmSpec holds the config for creating a VSM
+type VsmSpec struct {
+	Kind       string `yaml:"kind"`
+	APIVersion string `yaml:"apiVersion"`
+	Metadata   struct {
+		Name   string `yaml:"name"`
+		Labels struct {
+			Storage string `yaml:"volumeprovisioner.mapi.openebs.io/storage-size"`
+		}
+	} `yaml:"metadata"`
+}
 
 type openEBSProvisioner struct {
 	// Maya-API Server URI running in the cluster
@@ -62,6 +79,7 @@ func NewOpenEBSProvisioner(client kubernetes.Interface) controller.Provisioner {
 	
 	//TODO - HandleError Cases
 	mayaServiceURI := "http://" + getMayaClusterIP(client) + ":5656"
+	os.Setenv("MAPI_ADDR", mayaServiceURI)
 	
 	return &openEBSProvisioner{
 		mapiURI:    mayaServiceURI,
@@ -131,6 +149,61 @@ func getMayaClusterIP(client kubernetes.Interface) string {
 	
 	return clusterIP
 }
+
+// CreateAPIVsm to create the Vsm through a API call to m-apiserver
+func CreateAPIVsm(vname string, size string) error {
+
+	var vs VsmSpec
+
+	addr := os.Getenv("MAPI_ADDR")
+	if addr == "" {
+		err := errors.New("MAPI_ADDR environment variable not set")
+		glog.Fatalf("Error getting maya-api-server IP Address: %v", err)
+		return err
+	}
+	url := addr + "/latest/volumes/"
+
+	vs.Kind = "PersistentVolumeClaim"
+	vs.APIVersion = "v1"
+	vs.Metadata.Name = vname
+	vs.Metadata.Labels.Storage = size
+
+	//Marshal serializes the value provided into a YAML document
+	yamlValue, _ := yaml.Marshal(vs)
+
+	glog.Infof("VSM Spec Created:\n%v\n", string(yamlValue))
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(yamlValue))
+
+	req.Header.Add("Content-Type", "application/yaml")
+
+	c := &http.Client{
+		Timeout: timeout,
+	}
+	resp, err := c.Do(req)
+	if err != nil {
+		glog.Fatalf("http.Do() error: : %v", err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		glog.Fatalf("ioutil.ReadAll() error: : %v", err)
+		return err
+	}
+	code := resp.StatusCode
+
+	if code != http.StatusOK {
+		glog.Fatalf("Status error: %v\n", http.StatusText(code))
+		os.Exit(1)
+	}
+
+	glog.Infof("VSM Successfully Created:\n%v\n", string(data))
+
+	return nil
+}
+
 
 func main() {
 	syscall.Umask(0)
