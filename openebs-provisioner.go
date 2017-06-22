@@ -87,16 +87,6 @@ type Volume struct {
         } `json:"metadata"`
 }
 
-// Annotations describes volume struct
-type Annotations struct {
-        VolSize string `json:"be.jiva.volume.openebs.io\/vol-size"`
-        //      VolAddr      string   `json:"fe.jiva.volume.openebs.io/ip"`
-        Iqn          string `json:"iqn"`
-        Targetportal string `json:"targetportal"`
-        //      Replicas     []string `json:"JIVA_REP_IP_*"`
-        ReplicaCount string `json:"be.jiva.volume.openebs.io\/count"`
-}
-
 
 type openEBSProvisioner struct {
 	// Maya-API Server URI running in the cluster
@@ -128,7 +118,7 @@ var _ controller.Provisioner = &openEBSProvisioner{}
 
 // Provision creates a storage asset and returns a PV object representing it.
 func (p *openEBSProvisioner) Provision(options controller.VolumeOptions) (*v1.PersistentVolume, error) {
-	path := "/var/openebs/" + options.PVName
+	//path := "/var/openebs/" + options.PVName
 
 	//TODO - Issue a request to Maya API Server to create a volume
 	var volume Volume
@@ -139,6 +129,21 @@ func (p *openEBSProvisioner) Provision(options controller.VolumeOptions) (*v1.Pe
 		glog.Fatalf("Error creating volume: %v", err)
 		return nil, err
 	}
+
+	var iqn, targetPortal string
+
+        for key, value := range volume.Metadata.Annotations.(map[string]interface{}) {
+                switch key {
+                case "iqn":
+                        iqn = value.(string)
+                case "targetportal":
+                        targetPortal = value.(string)
+                }
+        }
+
+	glog.Infof("Volume IQN: %v", iqn)
+	glog.Infof("Volume Target: %v", targetPortal)
+
 
 	//TODO - fill in the iSCSI PV details
 	pv := &v1.PersistentVolume{
@@ -155,8 +160,12 @@ func (p *openEBSProvisioner) Provision(options controller.VolumeOptions) (*v1.Pe
 				v1.ResourceName(v1.ResourceStorage): options.PVC.Spec.Resources.Requests[v1.ResourceName(v1.ResourceStorage)],
 			},
 			PersistentVolumeSource: v1.PersistentVolumeSource{
-				HostPath: &v1.HostPathVolumeSource{
-					Path: path,
+				ISCSI: &v1.ISCSIVolumeSource{
+					TargetPortal: targetPortal,
+					IQN: iqn,
+     					Lun: 1,
+     					FSType: "ext4",
+					ReadOnly: false,
 				},
 			},
 		},
