@@ -54,15 +54,17 @@ type openEBSProvisioner struct {
 }
 
 // NewOpenEBSProvisioner creates a new openebs provisioner
-func NewOpenEBSProvisioner() controller.Provisioner {
+func NewOpenEBSProvisioner(client kubernetes.Interface) controller.Provisioner {
 	nodeName := os.Getenv("NODE_NAME")
 	if nodeName == "" {
 		glog.Fatal("env variable NODE_NAME must be set so that this provisioner can identify itself")
 	}
 	
-	//TODO - Replace with the code to dynamically fetch the MAPI_CLUSTER_IP
+	//TODO - HandleError Cases
+	mayaServiceURI := "http://" + getMayaClusterIP(client) + ":5656"
+	
 	return &openEBSProvisioner{
-		mapiURI:    "http://MAPI_CLUSTER_IP:5656/",
+		mapiURI:    mayaServiceURI,
 		identity: nodeName,
 	}
 }
@@ -115,6 +117,21 @@ func (p *openEBSProvisioner) Delete(volume *v1.PersistentVolume) error {
 	return nil
 }
 
+func getMayaClusterIP(client kubernetes.Interface) string {
+	clusterIP := "127.0.0.1"
+	
+	//Fetch the Maya ClusterIP using the Maya API Server Service
+	sc, err := client.CoreV1().Services("").Get("maya-api-server")
+	if err != nil {
+		glog.Fatalf("Error getting maya-api-server IP Address: %v", err)
+	}
+	
+	clusterIP = svc.Spec.ClusterIP
+	glog.Infof("Maya Cluster IP: %v", clusterIP)
+	
+	return clusterIP
+}
+
 func main() {
 	syscall.Umask(0)
 
@@ -141,7 +158,7 @@ func main() {
 
 	// Create the provisioner: it implements the Provisioner interface expected by
 	// the controller
-	openEBSProvisioner := NewOpenEBSProvisioner()
+	openEBSProvisioner := NewOpenEBSProvisioner(clientset)
 
 	// Start the provision controller which will dynamically provision OpenEBS VSM
 	// PVs
