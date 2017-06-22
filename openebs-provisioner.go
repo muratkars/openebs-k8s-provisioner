@@ -18,6 +18,7 @@ limitations under the License.
 package main
 
 import (
+	"encoding/json"
 	"bytes"
 	"errors"
 	"flag"
@@ -61,6 +62,42 @@ type VsmSpec struct {
 	} `yaml:"metadata"`
 }
 
+// Volume is a command implementation struct
+type Volume struct {
+        Spec struct {
+                AccessModes interface{} `json:"AccessModes"`
+                Capacity    interface{} `json:"Capacity"`
+                ClaimRef    interface{} `json:"ClaimRef"`
+                OpenEBS     struct {
+                        VolumeID string `json:"volumeID"`
+                } `json:"OpenEBS"`
+                PersistentVolumeReclaimPolicy string `json:"PersistentVolumeReclaimPolicy"`
+                StorageClassName              string `json:"StorageClassName"`
+        } `json:"Spec"`
+
+        Status struct {
+                Message string `json:"Message"`
+                Phase   string `json:"Phase"`
+                Reason  string `json:"Reason"`
+        } `json:"Status"`
+        Metadata struct {
+                Annotations       interface{} `json:"annotations"`
+                CreationTimestamp interface{} `json:"creationTimestamp"`
+                Name              string      `json:"name"`
+        } `json:"metadata"`
+}
+
+// Annotations describes volume struct
+type Annotations struct {
+        VolSize string `json:"be.jiva.volume.openebs.io\/vol-size"`
+        //      VolAddr      string   `json:"fe.jiva.volume.openebs.io/ip"`
+        Iqn          string `json:"iqn"`
+        Targetportal string `json:"targetportal"`
+        //      Replicas     []string `json:"JIVA_REP_IP_*"`
+        ReplicaCount string `json:"be.jiva.volume.openebs.io\/count"`
+}
+
+
 type openEBSProvisioner struct {
 	// Maya-API Server URI running in the cluster
 	mapiURI string
@@ -94,6 +131,15 @@ func (p *openEBSProvisioner) Provision(options controller.VolumeOptions) (*v1.Pe
 	path := "/var/openebs/" + options.PVName
 
 	//TODO - Issue a request to Maya API Server to create a volume
+	var volume Volume
+	volSize := options.PVC.Spec.Resources.Requests[v1.ResourceName(v1.ResourceStorage)]
+	//TODO - Need to change the size as a value that Maya Server can accept
+	err := CreateAPIVsm(options.PVName, volSize.String(), &volume)
+	if err != nil {
+		glog.Fatalf("Error creating volume: %v", err)
+		return nil, err
+	}
+
 	//TODO - fill in the iSCSI PV details
 	pv := &v1.PersistentVolume{
 		ObjectMeta: metav1.ObjectMeta{
@@ -151,7 +197,7 @@ func getMayaClusterIP(client kubernetes.Interface) string {
 }
 
 // CreateAPIVsm to create the Vsm through a API call to m-apiserver
-func CreateAPIVsm(vname string, size string) error {
+func CreateAPIVsm(vname string, size string, obj interface{}) error {
 
 	var vs VsmSpec
 
@@ -201,7 +247,7 @@ func CreateAPIVsm(vname string, size string) error {
 
 	glog.Infof("VSM Successfully Created:\n%v\n", string(data))
 
-	return nil
+	return json.NewDecoder(resp.Body).Decode(obj)
 }
 
 
