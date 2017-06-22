@@ -6,8 +6,6 @@ services:
 language: go
 go:
   - 1.8
-install:
-  - make bootstrap deps
 script:
   - make build
 after_success:
