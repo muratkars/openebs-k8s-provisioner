@@ -192,6 +192,7 @@ func (p *openEBSProvisioner) Delete(volume *v1.PersistentVolume) error {
 	}
 
 	//TODO - Issue a delete request to Maya API Server
+	deleteVsm(volume.Name)
 
 	return nil
 }
@@ -297,6 +298,38 @@ func listVsm(vname string, obj interface{}) error {
 }
 
 
+// deleteVsm to get delete Vsm through a API call to m-apiserver
+func deleteVsm(vname string) error {
+
+	addr := os.Getenv("MAPI_ADDR")
+	if addr == "" {
+		err := errors.New("MAPI_ADDR environment variable not set")
+		glog.Fatalf("Error getting maya-api-server IP Address: %v", err)
+		return err
+	}
+	url := addr + "/latest/volumes/delete/" + vname
+
+	glog.Infof("Delete VSM :%v", string(vname))
+
+	req, err := http.NewRequest("GET", url, nil)
+	c := &http.Client{
+		Timeout: timeout,
+	}
+	resp, err := c.Do(req)
+	if err != nil {
+		glog.Fatalf("http.Do() error: : %v", err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	code := resp.StatusCode
+	if code != http.StatusOK {
+		glog.Fatalf("Status error: %v\n", http.StatusText(code))
+		os.Exit(1)
+	}
+	glog.Info("VSM Deleted Successfully initiated")
+	return nil
+}
 
 func main() {
 	syscall.Umask(0)
