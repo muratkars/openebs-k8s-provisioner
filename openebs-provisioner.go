@@ -22,7 +22,7 @@ import (
 	"bytes"
 	"errors"
 	"flag"
-	"io/ioutil"
+	//"io/ioutil"
 	"net/http"
 	"os"
 	"time"
@@ -242,20 +242,18 @@ func CreateAPIVsm(vname string, size string, obj interface{}) error {
 	}
 	defer resp.Body.Close()
 
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		glog.Fatalf("ioutil.ReadAll() error: : %v", err)
-		return err
-	}
-	code := resp.StatusCode
+	//data, err := ioutil.ReadAll(resp.Body)
+	//if err != nil {
+	//	glog.Fatalf("ioutil.ReadAll() error: : %v", err)
+	//	return err
+	//}
 
+	code := resp.StatusCode
 	if code != http.StatusOK {
 		glog.Fatalf("Status error: %v\n", http.StatusText(code))
 		os.Exit(1)
 	}
-
-	glog.Infof("VSM Successfully Created:\n%v\n", string(data))
-
+	glog.Info("VSM Successfully Created")
 	return json.NewDecoder(resp.Body).Decode(obj)
 }
 
