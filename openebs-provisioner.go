@@ -22,7 +22,7 @@ import (
 	"bytes"
 	"errors"
 	"flag"
-	//"io/ioutil"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"time"
@@ -124,9 +124,15 @@ func (p *openEBSProvisioner) Provision(options controller.VolumeOptions) (*v1.Pe
 	var volume Volume
 	volSize := options.PVC.Spec.Resources.Requests[v1.ResourceName(v1.ResourceStorage)]
 	//TODO - Need to change the size as a value that Maya Server can accept
-	err := CreateAPIVsm(options.PVName, volSize.String(), &volume)
+	err := createVsm(options.PVName, volSize.String())
 	if err != nil {
 		glog.Fatalf("Error creating volume: %v", err)
+		return nil, err
+	}
+
+	err = listVsm(options.PVName, &volume)
+	if err != nil {
+		glog.Fatalf("Error getting volume details: %v", err)
 		return nil, err
 	}
 
@@ -134,9 +140,9 @@ func (p *openEBSProvisioner) Provision(options controller.VolumeOptions) (*v1.Pe
 
         for key, value := range volume.Metadata.Annotations.(map[string]interface{}) {
                 switch key {
-                case "iqn":
+                case "vsm.openebs.io/iqn":
                         iqn = value.(string)
-                case "targetportal":
+                case "vsm.openebs.io/targetportals":
                         targetPortal = value.(string)
                 }
         }
@@ -205,8 +211,8 @@ func getMayaClusterIP(client kubernetes.Interface) string {
 	return clusterIP
 }
 
-// CreateAPIVsm to create the Vsm through a API call to m-apiserver
-func CreateAPIVsm(vname string, size string, obj interface{}) error {
+// createVsm to create the Vsm through a API call to m-apiserver
+func createVsm(vname string, size string) error {
 
 	var vs VsmSpec
 
@@ -242,20 +248,54 @@ func CreateAPIVsm(vname string, size string, obj interface{}) error {
 	}
 	defer resp.Body.Close()
 
-	//data, err := ioutil.ReadAll(resp.Body)
-	//if err != nil {
-	//	glog.Fatalf("ioutil.ReadAll() error: : %v", err)
-	//	return err
-	//}
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		glog.Fatalf("ioutil.ReadAll() error: : %v", err)
+		return err
+	}
 
 	code := resp.StatusCode
 	if code != http.StatusOK {
 		glog.Fatalf("Status error: %v\n", http.StatusText(code))
 		os.Exit(1)
 	}
-	glog.Info("VSM Successfully Created")
+	glog.Infof("VSM Successfully Created:\n%v\n", string(data))
+	return nil
+}
+
+// listVsm to get the info of Vsm through a API call to m-apiserver
+func listVsm(vname string, obj interface{}) error {
+
+	addr := os.Getenv("MAPI_ADDR")
+	if addr == "" {
+		err := errors.New("MAPI_ADDR environment variable not set")
+		glog.Fatalf("Error getting maya-api-server IP Address: %v", err)
+		return err
+	}
+	url := addr + "/latest/volumes/info/" + vname
+
+	glog.Infof("Get details for VSM :%v", string(vname))
+
+	req, err := http.NewRequest("GET", url, nil)
+	c := &http.Client{
+		Timeout: timeout,
+	}
+	resp, err := c.Do(req)
+	if err != nil {
+		glog.Fatalf("http.Do() error: : %v", err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	code := resp.StatusCode
+	if code != http.StatusOK {
+		glog.Fatalf("Status error: %v\n", http.StatusText(code))
+		os.Exit(1)
+	}
+	glog.Info("VSM Details Successfully Retrieved")
 	return json.NewDecoder(resp.Body).Decode(obj)
 }
+
 
 
 func main() {
