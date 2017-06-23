@@ -194,7 +194,7 @@ func getMayaClusterIP(client kubernetes.Interface) string {
 	clusterIP := "127.0.0.1"
 	
 	//Fetch the Maya ClusterIP using the Maya API Server Service
-	sc, err := client.CoreV1().Services("").Get("maya-api-server", metav1.GetOptions{})
+	sc, err := client.CoreV1().Services("default").Get("maya-apiserver-service", metav1.GetOptions{})
 	if err != nil {
 		glog.Fatalf("Error getting maya-api-server IP Address: %v", err)
 	}
