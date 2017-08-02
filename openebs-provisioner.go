@@ -18,8 +18,8 @@ limitations under the License.
 package main
 
 import (
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"io/ioutil"
@@ -27,15 +27,17 @@ import (
 	"os"
 	"time"
 
+	"syscall"
+
 	"github.com/golang/glog"
 	"github.com/kubernetes-incubator/external-storage/lib/controller"
+	maya "github.com/openebs/maya/types/v1"
+	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/rest"
-	"syscall"
-	yaml "gopkg.in/yaml.v2"
 )
 
 const (
@@ -49,44 +51,6 @@ const (
 	renewDeadline             = controller.DefaultRenewDeadline
 	termLimit                 = controller.DefaultTermLimit
 )
-
-//VsmSpec holds the config for creating a VSM
-type VsmSpec struct {
-	Kind       string `yaml:"kind"`
-	APIVersion string `yaml:"apiVersion"`
-	Metadata   struct {
-		Name   string `yaml:"name"`
-		Labels struct {
-			Storage string `yaml:"volumeprovisioner.mapi.openebs.io/storage-size"`
-		}
-	} `yaml:"metadata"`
-}
-
-// Volume is a command implementation struct
-type Volume struct {
-        Spec struct {
-                AccessModes interface{} `json:"AccessModes"`
-                Capacity    interface{} `json:"Capacity"`
-                ClaimRef    interface{} `json:"ClaimRef"`
-                OpenEBS     struct {
-                        VolumeID string `json:"volumeID"`
-                } `json:"OpenEBS"`
-                PersistentVolumeReclaimPolicy string `json:"PersistentVolumeReclaimPolicy"`
-                StorageClassName              string `json:"StorageClassName"`
-        } `json:"Spec"`
-
-        Status struct {
-                Message string `json:"Message"`
-                Phase   string `json:"Phase"`
-                Reason  string `json:"Reason"`
-        } `json:"Status"`
-        Metadata struct {
-                Annotations       interface{} `json:"annotations"`
-                CreationTimestamp interface{} `json:"creationTimestamp"`
-                Name              string      `json:"name"`
-        } `json:"metadata"`
-}
-
 
 type openEBSProvisioner struct {
 	// Maya-API Server URI running in the cluster
@@ -103,13 +67,13 @@ func NewOpenEBSProvisioner(client kubernetes.Interface) controller.Provisioner {
 	if nodeName == "" {
 		glog.Fatal("env variable NODE_NAME must be set so that this provisioner can identify itself")
 	}
-	
+
 	//TODO - HandleError Cases
 	mayaServiceURI := "http://" + getMayaClusterIP(client) + ":5656"
 	os.Setenv("MAPI_ADDR", mayaServiceURI)
-	
+
 	return &openEBSProvisioner{
-		mapiURI:    mayaServiceURI,
+		mapiURI:  mayaServiceURI,
 		identity: nodeName,
 	}
 }
@@ -121,7 +85,7 @@ func (p *openEBSProvisioner) Provision(options controller.VolumeOptions) (*v1.Pe
 	//path := "/var/openebs/" + options.PVName
 
 	//TODO - Issue a request to Maya API Server to create a volume
-	var volume Volume
+	var volume maya.Volume
 	volSize := options.PVC.Spec.Resources.Requests[v1.ResourceName(v1.ResourceStorage)]
 	//TODO - Need to change the size as a value that Maya Server can accept
 	err := createVsm(options.PVName, volSize.String())
@@ -138,18 +102,17 @@ func (p *openEBSProvisioner) Provision(options controller.VolumeOptions) (*v1.Pe
 
 	var iqn, targetPortal string
 
-        for key, value := range volume.Metadata.Annotations.(map[string]interface{}) {
-                switch key {
-                case "vsm.openebs.io/iqn":
-                        iqn = value.(string)
-                case "vsm.openebs.io/targetportals":
-                        targetPortal = value.(string)
-                }
-        }
+	for key, value := range volume.Metadata.Annotations.(map[string]interface{}) {
+		switch key {
+		case "vsm.openebs.io/iqn":
+			iqn = value.(string)
+		case "vsm.openebs.io/targetportals":
+			targetPortal = value.(string)
+		}
+	}
 
 	glog.Infof("Volume IQN: %v", iqn)
 	glog.Infof("Volume Target: %v", targetPortal)
-
 
 	//TODO - fill in the iSCSI PV details
 	pv := &v1.PersistentVolume{
@@ -168,10 +131,10 @@ func (p *openEBSProvisioner) Provision(options controller.VolumeOptions) (*v1.Pe
 			PersistentVolumeSource: v1.PersistentVolumeSource{
 				ISCSI: &v1.ISCSIVolumeSource{
 					TargetPortal: targetPortal,
-					IQN: iqn,
-     					Lun: 1,
-     					FSType: "ext4",
-					ReadOnly: false,
+					IQN:          iqn,
+					Lun:          1,
+					FSType:       "ext4",
+					ReadOnly:     false,
 				},
 			},
 		},
@@ -199,23 +162,23 @@ func (p *openEBSProvisioner) Delete(volume *v1.PersistentVolume) error {
 
 func getMayaClusterIP(client kubernetes.Interface) string {
 	clusterIP := "127.0.0.1"
-	
+
 	//Fetch the Maya ClusterIP using the Maya API Server Service
 	sc, err := client.CoreV1().Services("default").Get("maya-apiserver-service", metav1.GetOptions{})
 	if err != nil {
 		glog.Fatalf("Error getting maya-api-server IP Address: %v", err)
 	}
-	
+
 	clusterIP = sc.Spec.ClusterIP
 	glog.Infof("Maya Cluster IP: %v", clusterIP)
-	
+
 	return clusterIP
 }
 
 // createVsm to create the Vsm through a API call to m-apiserver
 func createVsm(vname string, size string) error {
 
-	var vs VsmSpec
+	var vs maya.VsmSpec
 
 	addr := os.Getenv("MAPI_ADDR")
 	if addr == "" {
@@ -296,7 +259,6 @@ func listVsm(vname string, obj interface{}) error {
 	glog.Info("VSM Details Successfully Retrieved")
 	return json.NewDecoder(resp.Body).Decode(obj)
 }
-
 
 // deleteVsm to get delete Vsm through a API call to m-apiserver
 func deleteVsm(vname string) error {
