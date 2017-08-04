@@ -7,6 +7,7 @@ language: go
 go:
   - 1.8
 script:
+  - make deps
   - make build
 after_success:
   - make image
@@ -14,6 +15,7 @@ notifications:
   email:
     recipients:
     - kiran.mova@cloudbyte.com
+    - satyam.zode@openebs.io
 branches:
   except:
     - /^*-v[0-9]/      
