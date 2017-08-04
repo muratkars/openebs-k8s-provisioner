@@ -7,6 +7,7 @@ language: go
 go:
   - 1.8
 script:
+  - make bootstrap
   - make deps
   - make build
 after_success:
