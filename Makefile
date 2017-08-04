@@ -28,7 +28,7 @@ bootstrap:
 
 deps: 
 	rm -rf vendor
-	@glide up -v
+	@glide up
 	glide install -v
 
 build: $(shell find . -name "*.go")
