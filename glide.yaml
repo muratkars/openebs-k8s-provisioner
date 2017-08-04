@@ -6,14 +6,32 @@ import:
   subpackages:
   - lib/controller
 - package: k8s.io/apimachinery
-  version: c1c4a7f
+  version: 728b986edb9bd4bb8a022a8cc13573a97ecc2239
   subpackages:
+  - pkg/api/errors
+  - pkg/api/resource
   - pkg/apis/meta/v1
+  - pkg/runtime
+  - pkg/types
+  - pkg/util/runtime
+  - pkg/util/uuid
+  - pkg/util/validation
+  - pkg/util/validation/field
   - pkg/util/wait
+  - pkg/watch
 - package: k8s.io/client-go
-  version: 7615377
+  version: 42a124578af9e61f5c6902fa7b6b2cb6538f17d2
   subpackages:
   - kubernetes
-  - pkg/api/v1
+  - kubernetes/typed/core/v1
   - rest
-- package: github.com/openebs/maya
+  - tools/cache
+  - tools/clientcmd
+  - tools/record
+- package: k8s.io/api
+  version: e24ed681f56165befbea50a24f7e9f1c079ac366
+- package: k8s.io/kubernetes
+  version: df7f4b3526a580ef122aaeef61ab52842a60a88b
+  subpackages:
+  - pkg/util/goroutinemap
+  - pkg/util/version

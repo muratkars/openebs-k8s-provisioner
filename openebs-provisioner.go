@@ -31,12 +31,11 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/kubernetes-incubator/external-storage/lib/controller"
-	maya "github.com/openebs/maya/types/v1"
 	yaml "gopkg.in/yaml.v2"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/rest"
 )
 
@@ -51,6 +50,43 @@ const (
 	renewDeadline             = controller.DefaultRenewDeadline
 	termLimit                 = controller.DefaultTermLimit
 )
+
+//VsmSpec holds the config for creating a VSM
+type VsmSpec struct {
+	Kind       string `yaml:"kind"`
+	APIVersion string `yaml:"apiVersion"`
+	Metadata   struct {
+		Name   string `yaml:"name"`
+		Labels struct {
+			Storage string `yaml:"volumeprovisioner.mapi.openebs.io/storage-size"`
+		}
+	} `yaml:"metadata"`
+}
+
+// Volume is a command implementation struct
+type Volume struct {
+	Spec struct {
+		AccessModes interface{} `json:"AccessModes"`
+		Capacity    interface{} `json:"Capacity"`
+		ClaimRef    interface{} `json:"ClaimRef"`
+		OpenEBS     struct {
+			VolumeID string `json:"volumeID"`
+		} `json:"OpenEBS"`
+		PersistentVolumeReclaimPolicy string `json:"PersistentVolumeReclaimPolicy"`
+		StorageClassName              string `json:"StorageClassName"`
+	} `json:"Spec"`
+
+	Status struct {
+		Message string `json:"Message"`
+		Phase   string `json:"Phase"`
+		Reason  string `json:"Reason"`
+	} `json:"Status"`
+	Metadata struct {
+		Annotations       interface{} `json:"annotations"`
+		CreationTimestamp interface{} `json:"creationTimestamp"`
+		Name              string      `json:"name"`
+	} `json:"metadata"`
+}
 
 type openEBSProvisioner struct {
 	// Maya-API Server URI running in the cluster
@@ -85,7 +121,7 @@ func (p *openEBSProvisioner) Provision(options controller.VolumeOptions) (*v1.Pe
 	//path := "/var/openebs/" + options.PVName
 
 	//TODO - Issue a request to Maya API Server to create a volume
-	var volume maya.Volume
+	var volume Volume
 	volSize := options.PVC.Spec.Resources.Requests[v1.ResourceName(v1.ResourceStorage)]
 	//TODO - Need to change the size as a value that Maya Server can accept
 	err := createVsm(options.PVName, volSize.String())
@@ -178,7 +214,7 @@ func getMayaClusterIP(client kubernetes.Interface) string {
 // createVsm to create the Vsm through a API call to m-apiserver
 func createVsm(vname string, size string) error {
 
-	var vs maya.VsmSpec
+	var vs VsmSpec
 
 	addr := os.Getenv("MAPI_ADDR")
 	if addr == "" {
